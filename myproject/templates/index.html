@@ -26,6 +26,88 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon-32x32.png' %}">
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon-16x16.png' %}">
     
+    <style>
+        .testimonial-rating {
+            margin-top: 0.5rem;
+        }
+        
+        .star {
+            color: #ddd;
+            font-size: 1.2rem;
+            margin-right: 0.2rem;
+        }
+        
+        .star.filled {
+            color: #ffd700;
+        }
+        
+        .field-errors {
+            color: #c33;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+        
+        .form-field {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-field label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .form-field input,
+        .form-field textarea,
+        .form-field select {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        .form-field input:focus,
+        .form-field textarea:focus,
+        .form-field select:focus {
+            outline: none;
+            border-color: #8B4513;
+            box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.1);
+        }
+        
+        .messages {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 1rem;
+        }
+        
+        .messages li {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .messages .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .messages .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .messages .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
 
 </head>
 
@@ -78,10 +160,11 @@
                         
                         {% if user.is_authenticated %}
                             <li><a class="smoothscroll" href="#submit-testimonial">Submit Testimonial</a></li>
+                            <li><a href="{% url 'profile' %}">Profile</a></li>
                             <li><a href="{% url 'logout' %}">Logout</a></li>
                         {% else %}
-                            <li><a class="smoothscroll" href="#registration">Register</a></li>
-                            <li><a class="smoothscroll" href="#login">Login</a></li>
+                            <li><a href="{% url 'register' %}">Register</a></li>
+                            <li><a href="{% url 'login' %}">Login</a></li>
                         {% endif %}
 
                     </ul> <div class="header-contact">
@@ -365,8 +448,17 @@
                             <div class="testimonials-slider__slide swiper-slide">
                                 <div class="testimonials-slider__author">
                                     <cite class="testimonials-slider__cite">
-                                        {{ testimonial.user.username }}
+                                        {{ testimonial.user.first_name }} {{ testimonial.user.last_name }}
                                     </cite>
+                                    <div class="testimonial-rating">
+                                        {% for i in "12345" %}
+                                            {% if forloop.counter <= testimonial.rating %}
+                                                <span class="star filled">★</span>
+                                            {% else %}
+                                                <span class="star">☆</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
                                 </div>
                                 <p>{{ testimonial.testimonial_text }}</p>
                             </div>
@@ -379,83 +471,47 @@
         </section>
 
         {% if user.is_authenticated %}
-            <section id="submit-testimonial">
-                {% if messages %}
-                    <ul class="messages">
-                        {% for message in messages %}
-                            <li class="{{ message.tags }}">{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
+            <section id="submit-testimonial" class="container s-testimonials target-section" style="padding-top: 150px; padding-bottom: 150px;">
+                <div class="row s-testimonials__content">
+                    <div class="column xl-8 lg-10 md-12" style="margin: 0 auto;">
+                        <div class="section-header" data-num="04">
+                            <h2 class="text-display-title">Share Your Experience</h2>
+                        </div>
+                        
+                        {% if messages %}
+                            <ul class="messages">
+                                {% for message in messages %}
+                                    <li class="{{ message.tags }}">{{ message }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
 
-                <h2>Submit Your Testimonial</h2>
-
-                <form method="post" action="{% url 'submit_testimonial' %}">
-                    {% csrf_token %}
-                       {{ testimonial_form.as_p }} 
-                    <button type="submit">Submit</button>
-                </form>
+                        <form method="post" action="{% url 'submit_testimonial' %}" class="contact-form">
+                            {% csrf_token %}
+                            
+                            <div class="form-field">
+                                <label for="id_testimonial_text">Your Testimonial</label>
+                                {{ testimonial_form.testimonial_text }}
+                                {% if testimonial_form.testimonial_text.errors %}
+                                    <div class="field-errors">{{ testimonial_form.testimonial_text.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="form-field">
+                                <label for="id_rating">Rating</label>
+                                {{ testimonial_form.rating }}
+                                {% if testimonial_form.rating.errors %}
+                                    <div class="field-errors">{{ testimonial_form.rating.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <button type="submit" class="btn btn--primary full-width">Submit Testimonial</button>
+                        </form>
+                    </div>
+                </div>
             </section>
         {% endif %}
 
-            
-        <section id="registration" class="container s-about target-section" style="padding-top: 150px; padding-bottom: 150px;">
-                <div class="row s-about__content">
-                    <div class="column xl-6 lg-8 md-12 s-about__content-end">
-                        <div class="section-header" data-num="04">
-                            <h2 class="text-display-title">Create an Account</h2>
-                        </div>
-                        
-                        <form action="{% url 'register' %}" method="POST" class="contact-form">
-                            {% csrf_token %}
-                            <div class="form-field">
-                                <input name="first_name" type="text" id="reg-first-name" class="full-width" placeholder="First Name" required>
-                            </div>
-                            <div class="form-field">
-                                <input name="last_name" type="text" id="reg-last-name" class="full-width" placeholder="Last Name" required>
-                            </div>
-                            <div class="form-field">
-                                <input name="username" type="text" id="reg-username" class="full-width" placeholder="Username" required>
-                            </div>
-                            <div class="form-field">
-                                <input name="email" type="email" id="reg-email" class="full-width" placeholder="Email Address" required>
-                            </div>
-                            <div class="form-field">
-                                <input name="password" type="password" id="reg-password" class="full-width" placeholder="Password" required>
-                            </div>
-                            <div class="form-field">
-                                <input name="password2" type="password" id="reg-password2" class="full-width" placeholder="Confirm Password" required>
-                            </div>
-                            <button type="submit" class="btn btn--primary full-width">Register</button>
-                        </form>
-                        <p class="u-text-center" style="margin-top: 20px;">
-                            Already have an account? <a href="#login">Log in here</a>.
-                        </p>
-                    </div>
-                </div>
-        </section> <section id="login" class="container s-about target-section" style="padding-top: 150px; padding-bottom: 150px;">
-            <div class="row s-about__content">
-                <div class="column xl-6 lg-8 md-12 s-about__content-end">
-                    <div class="section-header" data-num="05">
-                        <h2 class="text-display-title">Welcome Back</h2>
-                    </div>
-                    
-                    <form action="{% url 'login' %}" method="POST" class="contact-form">
-                        {% csrf_token %}
-                        <div class="form-field">
-                            <input name="username" type="text" id="login-username" class="full-width" placeholder="Username" required>
-                        </div>
-                        <div class="form-field">
-                            <input name="password" type="password" id="login-password" class="full-width" placeholder="Password" required>
-                        </div>
-                        <button type="submit" class="btn btn--primary full-width">Log In</button>
-                    </form>
-                    <p class="u-text-center" style="margin-top: 20px;">
-                        Don't have an account? <a href="#registration">Register here</a>.
-                    </p>
-                </div>
-            </div>
-        </section>
 
         
         <!-- # footer 

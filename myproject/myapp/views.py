@@ -1,26 +1,25 @@
-from django.shortcuts import render
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
-from django.contrib.auth.forms import AuthenticationForm
-from django.contrib import messages
-from .models import MenuItem, GalleryImage, Testimonial
-from .forms import TestimonialForm
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.urls import reverse_lazy
+from django.views.generic import CreateView
+from .models import MenuItem, GalleryImage, Testimonial, UserProfile
+from .forms import TestimonialForm, CustomUserCreationForm, CustomAuthenticationForm, UserProfileForm, UserUpdateForm
 
 
 def index(request):
     menu_items = MenuItem.objects.all().order_by('category', 'name')
     gallery_images = GalleryImage.objects.all()
-    testimonials = Testimonial.objects.all()
+    testimonials = Testimonial.objects.filter(is_approved=True)
 
-    blends = menu_items.filter(category='blends')
-    pastries = menu_items.filter(category='pastries')
-    treats = menu_items.filter(category='treats')
+    blends = menu_items.filter(category='blends', is_available=True)
+    pastries = menu_items.filter(category='pastries', is_available=True)
+    treats = menu_items.filter(category='treats', is_available=True)
 
     # Add the forms to the context
     testimonial_form = TestimonialForm()
-    login_form = AuthenticationForm()
 
     context = {
         'blends': blends,
@@ -28,86 +27,80 @@ def index(request):
         'treats': treats,
         'gallery_images': gallery_images,
         'testimonials': testimonials,
-        'testimonial_form': testimonial_form,  # Pass the testimonial form
-        'login_form': login_form,              # Pass the login form
+        'testimonial_form': testimonial_form,
     }
     return render(request, 'index.html', context)
+
+
 def register(request):
     if request.method == 'POST':
-        # Safely retrieve data using .get() to avoid KeyError
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        password2 = request.POST.get('password2')
-
-        if password != password2:
-            messages.error(request, 'Passwords do not match.')
-            return redirect('index')
-
-        if User.objects.filter(username=username).exists():
-            messages.error(request, 'Username is already taken.')
-            return redirect('index')
-            
-        if User.objects.filter(email=email).exists():
-            messages.error(request, 'Email is already taken.')
-            return redirect('index')
-            
-        try:
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name
-            )
-            
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
             messages.success(request, 'Registration successful! You can now log in.')
-            return redirect('index')
-
-        except Exception as e:
-            # This handles any other unexpected errors, like password validation failures
-            messages.error(request, f"An unexpected error occurred: {e}")
-            return redirect('index')
-            
+            return redirect('login')
+        else:
+            messages.error(request, 'Please correct the errors below.')
     else:
-        # On a GET request, render the index page where the form is located
-        return render(request, 'index.html')
+        form = CustomUserCreationForm()
     
+    return render(request, 'registration/register.html', {'form': form})
+
 
 def user_login(request):
     if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
+        form = CustomAuthenticationForm(request, data=request.POST)
         if form.is_valid():
             username = form.cleaned_data.get('username')
             password = form.cleaned_data.get('password')
             user = authenticate(username=username, password=password)
             if user is not None:
                 auth_login(request, user)
-                messages.success(request, f"Welcome back, {username}!")
+                messages.success(request, f"Welcome back, {user.first_name or username}!")
                 return redirect('index')
             else:
                 messages.error(request, "Invalid username or password.")
-                # This now renders the index page, where your form is located
-                return render(request, 'index.html', {'form': form})
         else:
             messages.error(request, "Invalid username or password.")
-            # This also renders the index page
-            return render(request, 'index.html', {'form': form})
     else:
-        form = AuthenticationForm()
-        # This renders the index page when the user first visits /login/
-        return render(request, 'index.html', {'form': form})
+        form = CustomAuthenticationForm()
+    
+    return render(request, 'registration/login.html', {'form': form})
+
 
 def user_logout(request):
-    auth.logout(request)
+    auth_logout(request)
     messages.info(request, "You have been logged out.")
     return redirect('index')
 
 
+@login_required
+def profile(request):
+    user_profile = get_object_or_404(UserProfile, user=request.user)
+    
+    if request.method == 'POST':
+        user_form = UserUpdateForm(request.POST, instance=request.user)
+        profile_form = UserProfileForm(request.POST, request.FILES, instance=user_profile)
+        
+        if user_form.is_valid() and profile_form.is_valid():
+            user_form.save()
+            profile_form.save()
+            messages.success(request, 'Your profile has been updated successfully!')
+            return redirect('profile')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        user_form = UserUpdateForm(instance=request.user)
+        profile_form = UserProfileForm(instance=user_profile)
+    
+    context = {
+        'user_form': user_form,
+        'profile_form': profile_form,
+        'user_profile': user_profile,
+    }
+    return render(request, 'profile.html', context)
 
-# The following view has been corrected
+
 @login_required
 def submit_testimonial(request):
     if request.method == 'POST':
@@ -116,7 +109,7 @@ def submit_testimonial(request):
             testimonial = form.save(commit=False)
             testimonial.user = request.user
             testimonial.save()
-            messages.success(request, 'Thank you for your testimonial!')
+            messages.success(request, 'Thank you for your testimonial! It will be reviewed before being published.')
             return redirect('index') 
         else:
             messages.error(request, 'Please correct the errors in the form.')
@@ -126,12 +119,12 @@ def submit_testimonial(request):
     # Pass the form and all other context variables needed for index.html
     menu_items = MenuItem.objects.all().order_by('category', 'name')
     gallery_images = GalleryImage.objects.all()
-    testimonials_display = Testimonial.objects.all()
+    testimonials_display = Testimonial.objects.filter(is_approved=True)
 
     context = {
-        'blends': menu_items.filter(category='blends'),
-        'pastries': menu_items.filter(category='pastries'),
-        'treats': menu_items.filter(category='treats'),
+        'blends': menu_items.filter(category='blends', is_available=True),
+        'pastries': menu_items.filter(category='pastries', is_available=True),
+        'treats': menu_items.filter(category='treats', is_available=True),
         'gallery_images': gallery_images,
         'testimonials': testimonials_display,
         'form': form,
